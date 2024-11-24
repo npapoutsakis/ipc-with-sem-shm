@@ -1,10 +1,10 @@
 
 all:
-	gcc -o parent_proc parent_proc.c
+	gcc -o ipc ipc.c
 
 abort:
-	ps -ef | grep "./parent_proc" | grep -v grep | awk '{print $$2}' | xargs -r kill
+	ps -ef | grep "./ipc" | grep -v grep | awk '{print $$2}' | xargs -r kill
 	@echo "All parent_proc processes have been terminated."
 
 clean:
-	rm -f parent_proc ; clear
+	rm -f ipc ; ipcrm --all ; clear
