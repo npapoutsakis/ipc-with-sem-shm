@@ -26,8 +26,8 @@ typedef struct Command {
 
 // create a structure to hold the shared memory segment
 typedef struct SharedMemory {
-    char text[SHM_SIZE];  // For storing message
-    int child_id;         // Child ID to whom message is sent
+    char text[SHM_SIZE];      // For storing message
+    int child_id;             // Child ID to whom message is sent
 } SharedMemory;
 
 
@@ -41,7 +41,6 @@ char *getRandomLine(char *filename){
     }
 
     // Randomness
-    srand(time(NULL));
     int line_num = rand() % 1000;
 
     // line buffer
@@ -137,7 +136,6 @@ int create_semaphores(int num_semaphores) {
     for (int i = 0; i < num_semaphores; i++) {
         semctl(semaphore_id, i, SETVAL, 1);
     }
-
     return semaphore_id;
 }
 
@@ -171,6 +169,8 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    srand(time(NULL));
+
     // Get commands from config file
     Command **commands = NULL;
     int num_commands = 0;
@@ -190,7 +190,7 @@ int main(int argc, char *argv[]) {
     SharedMemory *shared_mem = shmat(shm_id, NULL, 0);
 
     // keep track of active children
-    pid_t child_ids[max_children] = { };
+    pid_t child_ids[max_children];
     int active_children = 0;
 
     while(running) {
@@ -244,12 +244,13 @@ int main(int argc, char *argv[]) {
 
             else if(commands[i]->timestamp == global_time && strcmp(commands[i]->status, "T") == 0)
             {
-                // terminate_child(global_time);
-
-
-
-
-
+                int child_index = active_children - 1;
+                if(child_ids[child_index] > 0) {
+                        kill(child_ids[child_index], SIGTERM);
+                        printf("Terminated child %d\n", child_index + 1);
+                        child_ids[child_index] = 0;
+                        active_children--;
+                }
                 break;
             }
 
@@ -262,23 +263,25 @@ int main(int argc, char *argv[]) {
         // send_random_data();
 
         if(active_children > 0) {
-            srand(time(NULL));
             int random_child = rand() % active_children;
             char *random_line = getRandomLine("mobydick.txt");
+
             strcpy(shared_mem->text, random_line);
             shared_mem->child_id = random_child;
+
+            // signal i-th semaphore
             signal_semaphore(sems_id, random_child);
 
 
-            printf("Sent data to child %d: %s\n", random_child, random_line);
+            printf("Sent data to child %d: %s", random_child, random_line);
             free(random_line);
         }
 
 
-
         // Each iteration of the loop is a "tick" of the simulation
         global_time++;
-        sleep_ms(500);
+        // sleep_ms(1000);
+        // sleep(1);
     }
 
 
