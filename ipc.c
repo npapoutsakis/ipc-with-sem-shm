@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
     // index to hold the current command
     int command_index = 0;
     while (TRUE) {
-        printf("Tick %d:\n", global_time);
+        // printf("Tick %d:\n", global_time);
 
 
         //hold the command until we get to the timestamp
@@ -311,8 +311,6 @@ int main(int argc, char *argv[]) {
                         // Remove child from active list
                         for (int j = i; j < active_children - 1; j++) {
                             children[j] = children[j + 1];
-
-                            semctl(sems_id, j, SETVAL, semctl(sems_id, j + 1, GETVAL));
                         }
 
                         // Decrement active children number
@@ -344,19 +342,19 @@ int main(int argc, char *argv[]) {
             char *message = getRandomLine(argv[2]);
 
             strcpy(shared_mem, message);
-            printf("Active Children: %d\n", active_children);
+            // printf("Active Children: %d\n", active_children);
             printf("Parent sent to: %s the msg: %s" , (children[random_child].creation_command)->cid, message);
-            printf("Semaphore of child %d is %d\n", random_child, children[random_child].semaphore_index);
+            // printf("Semaphore of child %d is %d\n", random_child, children[random_child].semaphore_index);
 
             //we have to signal the semaphore of that specific child
-            signal_semaphore(sems_id, random_child);
+            signal_semaphore(sems_id, children[random_child].semaphore_index);
 
             free(message);
         }
 
         // Each iteration is a simulation 'tick'
         global_time++;
-        sleep_ms(500);
+        // sleep_ms(100);
     }
 
     return 0;
