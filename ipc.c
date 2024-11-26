@@ -176,7 +176,6 @@ void signal_semaphore(int semaphore_id, int index) {
     }
 }
 
-
 // clear used semaphores
 void remove_semaphores(int semaphore_id) {
     if(semctl(semaphore_id, 0, IPC_RMID) == -1) {
@@ -184,6 +183,7 @@ void remove_semaphores(int semaphore_id) {
         exit(EXIT_FAILURE);
     }
 }
+
 void handle_termination(int sig) {
     printf("Child %d received termination signal. Exiting...\n", getpid());
     shmdt(shared_memory); // Detach shared memory
@@ -241,68 +241,93 @@ int main(int argc, char *argv[]) {
     // this will be the index of children[] && semaphores
     int active_children = 0;
 
+    int command_index = 0;
+
     //global to -1 - random thought
     while (TRUE) {
         printf("Tick %d:\n", global_time);
 
-        for (int i = 0; i < num_commands; i++) {
-            if (strcmp(commands[i]->status, "EXIT") == 0 && commands[i]->timestamp == global_time) {
-                for (int j = 0; j < active_children; j++) {
-                    kill(children[j].pid, SIGTERM); // Send termination signal
-                    waitpid(children[j].pid, NULL, 0); // Wait for child to exit
-                }
+        //hold the command until we get to the timestamp
+        Command *command = commands[command_index];
 
-                // Cleanup
-                shmdt(shared_mem);
-                shmctl(shm_id, IPC_RMID, NULL);
-                remove_semaphores(sems_id);
-                freeSpace(&commands, num_commands);
-                printf("Exiting parent process.\n");
-                exit(EXIT_SUCCESS);
-            }
 
-            if (strcmp(commands[i]->status, "S") == 0 && commands[i]->timestamp == global_time) {
-                if (active_children < max_children) {
-                    int child_index = active_children;
-                    pid_t pid = fork();
+        if (strcmp(command->status, "EXIT") == 0 && command->timestamp == global_time) {
 
-                    if (pid == 0) {
-                        // In child process
-                        child_process(sems_id, child_index, shared_mem);
-                    } else if (pid > 0) {
-                        // In parent process
-                        children[child_index].pid = pid;
-                        children[child_index].semaphore_index = child_index;
-                        children[child_index].creation_command = commands[i];
-                        active_children++;
-                    }
-                }
-            }
-
-            if (strcmp(commands[i]->status, "T") == 0 && commands[i]->timestamp == global_time) {
-                for (int j = 0; j < active_children; j++) {
-                    if (children[j].creation_command == commands[i]) {
-                        kill(children[j].pid, SIGTERM);
-                        waitpid(children[j].pid, NULL, 0);
-                        printf("Terminated child process with PID: %d\n", children[j].pid);
-                        active_children--;
-
-                        // Shift remaining children down
-                        for (int k = j; k < active_children; k++) {
-                            children[k] = children[k + 1];
-                        }
-                        break;
-                    }
-                }
-            }
+            // Cleanup
+            shmdt(shared_mem);
+            shmctl(shm_id, IPC_RMID, NULL);
+            remove_semaphores(sems_id);
+            freeSpace(&commands, num_commands);
+            exit(EXIT_SUCCESS);
         }
 
-        if (active_children > 0) {
-            int random_child = rand() % active_children;
-            char *msg = getRandomLine(argv[2]);
-            strcpy(shared_mem, msg);
-            signal_semaphore(sems_id, children[random_child].semaphore_index);
+        else if (strcmp(command->status, "S") == 0 && command->timestamp == global_time) {
+            printf("%d %s %s\n", command->timestamp, command->cid, command->status);
+            command_index++;
+            // found a spawned command
         }
+
+        else if (strcmp(command->status, "T") == 0 && command->timestamp == global_time) {
+            printf("%d %s %s\n", command->timestamp, command->cid, command->status);
+            // found a terminated command
+            command_index++;
+        }
+
+        // for (int i = 0; i < num_commands; i++) {
+
+        //     if (strcmp(commands[i]->status, "EXIT") == 0 && commands[i]->timestamp == global_time) {
+        //         // Cleanup
+        //         shmdt(shared_mem);
+        //         shmctl(shm_id, IPC_RMID, NULL);
+        //         remove_semaphores(sems_id);
+        //         freeSpace(&commands, num_commands);
+        //         printf("Exiting parent process.\n");
+        //         exit(EXIT_SUCCESS);
+        //     }
+
+        //     if (strcmp(commands[i]->status, "S") == 0 && commands[i]->timestamp == global_time) {
+        //         if (active_children < max_children) {
+        //             int child_index = active_children;
+        //             pid_t pid = fork();
+
+        //             if (pid == 0) {
+        //                 // In child process
+        //                 child_process(sems_id, child_index, shared_mem);
+        //             } else if (pid > 0) {
+        //                 // In parent process
+        //                 children[child_index].pid = pid;
+        //                 children[child_index].semaphore_index = child_index;
+        //                 children[child_index].creation_command = commands[i];
+        //                 active_children++;
+        //             }
+        //         }
+        //     }
+
+        //     if (strcmp(commands[i]->status, "T") == 0 && commands[i]->timestamp == global_time) {
+
+        //         for (int j = 0; j < active_children; j++) {
+        //             if (children[j].creation_command == commands[i]) {
+        //                 kill(children[j].pid, SIGKILL);
+        //                 waitpid(children[j].pid, NULL, 0);
+        //                 printf("Terminated child process with PID: %d\n", children[j].pid);
+        //                 active_children--;
+
+        //                 // Shift remaining children down
+        //                 for (int k = j; k < active_children; k++) {
+        //                     children[k] = children[k + 1];
+        //                 }
+        //                 break;
+        //             }
+        //         }
+        //     }
+        // }
+
+        // if (active_children > 0) {
+        //     int random_child = rand() % active_children;
+        //     char *msg = getRandomLine(argv[2]);
+        //     strcpy(shared_mem, msg);
+        //     signal_semaphore(sems_id, children[random_child].semaphore_index);
+        // }
 
         global_time++;
     }
