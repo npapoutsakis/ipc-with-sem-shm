@@ -229,6 +229,28 @@ int main(int argc, char *argv[]) {
     while (TRUE) {
         printf("Tick %d:\n", global_time);
 
+        // check for active children
+        // create a random index for that child
+        // select the child ChildProcess[random_child]
+        // get a random line from file
+        // attach data to shared memory
+        // upon completion, signal the [random's_child] semaphore
+        // free(line)
+
+        if(active_children > 0) {
+            // generate a random index for the child
+            int random_child = rand() % active_children;
+            char *message = getRandomLine(argv[2]);
+
+            // wait_semaphore(sems_id, random_child);
+
+            strcpy(shared_mem, message);
+            printf("Parent sent to: %s the msg: %s" , (children[random_child].creation_command)->cid, message);
+            //we have to signal the semaphore of that specific child
+            signal_semaphore(sems_id, random_child);
+            free(message);
+        }
+
         //hold the command until we get to the timestamp
         Command *current = commands[command_index];
 
@@ -237,6 +259,12 @@ int main(int argc, char *argv[]) {
 
             //should we wait for the child to finish?
             //if exit comes and some children are running, just terminate them wait() and then exit
+            for(int i = 0; i < active_children; i++) {
+                // wait for the children to finish
+                pid_t pid = wait(NULL); 
+                if(pid == -1)
+                    perror("wait failed!");
+            }
 
             // Cleanup
             shmdt(shared_mem);
@@ -247,7 +275,7 @@ int main(int argc, char *argv[]) {
         }
         // SPAWN STATUS
         else if (strcmp(current->status, "S") == 0 && current->timestamp == global_time) {
-            printf("%d %s %s\n", current->timestamp, current->cid, current->status);
+            // printf("%d %s %s\n", current->timestamp, current->cid, current->status);
 
             // only when a 'compatible' command is found, move to the next one
             command_index++;
@@ -256,23 +284,17 @@ int main(int argc, char *argv[]) {
             pid_t pid = fork();
             if (pid == 0) {
                 // child process
-                signal(SIGTERM, handle_termination);
 
                 // the child here will lock & wait for the semaphore value to be incremented by the parent
                 while(TRUE) {
-                    printf("Hello from child! I'm waiting the semaphore!\n");
+                    // printf("Hello from child %s! I'm waiting the semaphore!\n", current->cid);
                     wait_semaphore(sems_id, child_index);
-
                     // attach to shared memory segment
                     char *data = shmat(shm_id, NULL, 0);
-                    printf("My semaphore actiavated! Reading Data: %s\n", data);
-                    
+                    printf("Child %s received msg: %s\n", current->cid, data);
 
-                    // signal to tell that we are waiting for new data to be shared
-                    printf("Signaling\n");
-                    signal_semaphore(sems_id, child_index);
+                    shmdt(data);
                 }
-
             }
             else if(pid > 0) {
                 // the parent has to update the stats. Increase the array of active children
@@ -292,19 +314,16 @@ int main(int argc, char *argv[]) {
         }
         // TERMINATION STATUS
         else if (strcmp(current->status, "T") == 0 && current->timestamp == global_time) {
-            printf("%d %s %s\n", current->timestamp, current->cid, current->status);
-            // found a terminated command
+            // printf("%d %s %s\n", current->timestamp, current->cid, current->status);
 
             // upon termination the child process should not continue with the rest for the code
             // it will terminate/exit only when the parent process calls kill on the child
-
-            // 15 C3 T
             for (int i = 0; i < active_children; i++){
                 if(!strcmp(current->cid, (children[i].creation_command)->cid)){
-                    printf("Termination of %s\n", current->cid);
+                    if (kill(children[i].pid, SIGKILL) == 0)
+                        printf("Termination of %s with process id %d\n", current->cid, children[i].pid);
                 }
             }
-
             // Decrement active children number
             active_children--;
 
@@ -312,96 +331,10 @@ int main(int argc, char *argv[]) {
             command_index++;
         }
 
-
-
-        // check for active children
-        // create a random index for that child
-        // select the child ChildProcess[random_child]
-        // get a random line from file
-        // attach data to shared memory
-        // upon completion, signal the [random's_child] semaphore
-        // free(line)
-
-        if(active_children > 0) {
-            // generate a random index for the child
-            int random_child = rand() % active_children;
-            char *message = getRandomLine(argv[2]);
-
-            strcpy(shared_mem, message);
-
-            //we have to signal the semaphore of that specific child
-            signal_semaphore(sems_id, random_child);
-            free(message);
-        }
-
-
         // Each iteration is a simulation 'tick'
         global_time++;
+        sleep_ms(250);
     }
-
-
-
-
-
-
-
-        // for (int i = 0; i < num_commands; i++) {
-
-        //     if (strcmp(commands[i]->status, "EXIT") == 0 && commands[i]->timestamp == global_time) {
-        //         // Cleanup
-        //         shmdt(shared_mem);
-        //         shmctl(shm_id, IPC_RMID, NULL);
-        //         remove_semaphores(sems_id);
-        //         freeSpace(&commands, num_commands);
-        //         printf("Exiting parent process.\n");
-        //         exit(EXIT_SUCCESS);
-        //     }
-
-        //     if (strcmp(commands[i]->status, "S") == 0 && commands[i]->timestamp == global_time) {
-        //         if (active_children < max_children) {
-        //             int child_index = active_children;
-        //             pid_t pid = fork();
-
-        //             if (pid == 0) {
-        //                 // In child process
-        //                 child_process(sems_id, child_index, shared_mem);
-        //             } else if (pid > 0) {
-        //                 // In parent process
-        //                 children[child_index].pid = pid;
-        //                 children[child_index].semaphore_index = child_index;
-        //                 children[child_index].creation_command = commands[i];
-        //                 active_children++;
-        //             }
-        //         }
-        //     }
-
-        //     if (strcmp(commands[i]->status, "T") == 0 && commands[i]->timestamp == global_time) {
-
-        //         for (int j = 0; j < active_children; j++) {
-        //             if (children[j].creation_command == commands[i]) {
-        //                 kill(children[j].pid, SIGKILL);
-        //                 waitpid(children[j].pid, NULL, 0);
-        //                 printf("Terminated child process with PID: %d\n", children[j].pid);
-        //                 active_children--;
-
-        //                 // Shift remaining children down
-        //                 for (int k = j; k < active_children; k++) {
-        //                     children[k] = children[k + 1];
-        //                 }
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
-
-        // if (active_children > 0) {
-        //     int random_child = rand() % active_children;
-        //     char *msg = getRandomLine(argv[2]);
-        //     strcpy(shared_mem, msg);
-        //     signal_semaphore(sems_id, children[random_child].semaphore_index);
-        // }
-
-
 
     return 0;
 }
