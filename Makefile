@@ -1,6 +1,6 @@
 
 all:
-	gcc -o ipc ipc.c
+	gcc -g -o ipc ipc.c -lrt
 
 abort:
 	ps -ef | grep "./ipc" | grep -v grep | awk '{print $$2}' | xargs -r kill

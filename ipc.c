@@ -188,6 +188,13 @@ void remove_semaphores(int semaphore_id) {
     }
 }
 
+void initializeChildren(ChildProcess* children, int M) {
+    for (int i = 0; i < M; i++) {
+        children[i].pid = -1;
+        children[i].semaphore_index = -1;
+        children[i].creation_command = NULL;
+    }
+}
 
 // ./ipc config_3_100.txt mobydick.txt 3
 int main(int argc, char *argv[]) {
@@ -220,6 +227,7 @@ int main(int argc, char *argv[]) {
 
     // keep track of active children
     ChildProcess children[max_children];
+    initializeChildren(children, max_children);
 
     // this will be the index of children[] && semaphores
     int active_children = 0;
@@ -228,29 +236,6 @@ int main(int argc, char *argv[]) {
     int command_index = 0;
     while (TRUE) {
         // printf("Tick %d:\n", global_time);
-
-        // Sending randon line to a random child
-        if(active_children > 0) {
-            // generate a random index for the child
-            int random_child = rand() % active_children;
-
-            // may contain lines with 0 characters
-            char *message = getRandomLine(argv[2]);
-
-            // Copy the random line to the shared memory segment
-            strcpy(shared_mem, message);
-
-            // printf("Active Children: %d\n", active_children);
-            printf("Parent sent to: %s the msg: %s" , (children[random_child].creation_command)->cid, message);
-            // printf("Semaphore of child %d is %d\n", random_child, children[random_child].semaphore_index);
-
-            //we have to signal the semaphore of that specific child
-            printf("Semaphore %d signaled for child %s\n", children[random_child].semaphore_index, (children[random_child].creation_command)->cid);
-            signal_semaphore(sems_id, children[random_child].semaphore_index);
-
-            free(message);
-        }
-
 
         //hold the command until we get to the timestamp
         Command *current = commands[command_index];
@@ -265,7 +250,8 @@ int main(int argc, char *argv[]) {
                     printf("Killing child %s with pid %d\n", children[i].creation_command->cid, children[i].pid);
                     waitpid(children[i].pid, NULL, 0); // Absorb the exit status
                 } else {
-                    perror("Failed to terminate child");
+                    printf("Failed to terminate child");
+                    exit(EXIT_FAILURE);
                 }
             }
 
@@ -290,13 +276,19 @@ int main(int argc, char *argv[]) {
 
                 // the child here will lock & wait for the semaphore value to be incremented by the parent
                 while(TRUE) {
-                    // printf("Hello from child %s! I'm waiting the semaphore!\n", current->cid);
+
                     wait_semaphore(sems_id, child_index);
+
                     // attach to shared memory segment
                     char *data = shmat(shm_id, NULL, 0);
-                    printf("Child %s received msg: %s\n", current->cid, data);
+                    printf("Tick: %d - Child %s received msg: %s\n", global_time, current->cid, data);
 
-                    shmdt(data);
+                    // Detach from shared memory segment
+                    if (shmdt(data) == -1) {
+                        perror("Error detaching from shared memory");
+                        exit(EXIT_FAILURE);
+                    }
+
                 }
             }
             else if(pid > 0) {
@@ -320,25 +312,26 @@ int main(int argc, char *argv[]) {
             // upon termination the child process should not continue with the rest for the code
             // it will terminate/exit only when the parent process calls kill on the child
 
-            for(int i = 0; i < active_children; i++) {
+            for (int i = 0; i < active_children; i++) {
 
                 if(!strcmp(current->cid, (children[i].creation_command)->cid)) {
 
-                    if (kill(children[i].pid, SIGTERM) == 0) {
-                        printf("Termination of %s with process id %d\n", current->cid, children[i].pid);
+                    if(kill(children[i].pid, SIGTERM) == 0) {
+                        // printf("Terminated %s %d\n", current->cid, children[i].pid);
+                        // waitpid(children[i].pid, NULL, 0);
 
-                        waitpid(children[i].pid, NULL, 0);
-
-
-                        // HERE IS THE BUG
                         // Remove child from active list
                         for (int j = i; j < active_children; j++) {
                             children[j] = children[j + 1];
                         }
 
+                        // Clear the last entry after shifting
+                        children[active_children - 1].pid = -1;
+                        children[active_children - 1].semaphore_index = -1;
+                        children[active_children - 1].creation_command = NULL;
+
                         // Decrement active children number
                         active_children--;
-
                         break;
                     }
 
@@ -350,11 +343,29 @@ int main(int argc, char *argv[]) {
             command_index++;
         }
 
+        // Sending randon line to a random child
+        if(active_children > 0) {
+            // generate a random index for the child
+            int random_child = rand() % active_children;
+
+            // may contain lines with 0 characters
+            char *message = getRandomLine(argv[2]);
+
+            // Copy the random line to the shared memory segment
+            strcpy(shared_mem, message);
+            printf("Tick: %d - Parent signals %s msg: %s", global_time, (children[random_child].creation_command)->cid, message);
+
+            // we have to signal the semaphore of that specific child
+            signal_semaphore(sems_id, children[random_child].semaphore_index);
+
+            semctl(sems_id, children[random_child].semaphore_index, SETVAL, 0);
+            free(message);
+        }
 
 
         // Each iteration is a simulation 'tick'
         global_time++;
-        sleep_ms(50);
+        sleep_ms(250);
     }
 
     return 0;

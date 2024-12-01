@@ -1,0 +1,30 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "Build and Debug C Program",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/ipc", // Path to the compiled executable
+        "args": ["config_3_1000.txt", "mobydick.txt", "3"], // Replace with your program's arguments
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}", // Current working directory
+        "environment": [],
+        "externalConsole": true, // Use an external console for debugging
+        "MIMode": "gdb", // Use gdb as the debugger
+        "preLaunchTask": "Build", // Ensure the program is built before debugging
+        "setupCommands": [
+        {
+            "description": "Enable pretty-printing for gdb",
+            "text": "-enable-pretty-printing",
+            "ignoreFailures": true
+        },
+        {
+            "description": "Print all local and global variables",
+            "text": "info variables",
+            "ignoreFailures": true
+        }
+        ]
+      }
+    ]
+  }
