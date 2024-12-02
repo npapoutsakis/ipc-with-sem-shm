@@ -62,7 +62,7 @@ char *getRandomLine(char *filename){
 
     int i = 0;
     while(fgets(buffer, 1024, file) != NULL) {
-        if(i == line_num)
+        if(i == line_num && strlen(buffer) > 1)
             break;
         i++;
     }
@@ -318,7 +318,7 @@ int main(int argc, char *argv[]) {
 
                     if(kill(children[i].pid, SIGTERM) == 0) {
                         // printf("Terminated %s %d\n", current->cid, children[i].pid);
-                        // waitpid(children[i].pid, NULL, 0);
+                        waitpid(children[i].pid, NULL, 0);
 
                         // Remove child from active list
                         for (int j = i; j < active_children; j++) {
@@ -357,15 +357,12 @@ int main(int argc, char *argv[]) {
 
             // we have to signal the semaphore of that specific child
             signal_semaphore(sems_id, children[random_child].semaphore_index);
-
-            semctl(sems_id, children[random_child].semaphore_index, SETVAL, 0);
             free(message);
         }
 
 
         // Each iteration is a simulation 'tick'
         global_time++;
-        sleep_ms(250);
     }
 
     return 0;
