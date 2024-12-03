@@ -6,7 +6,7 @@
       "type": "cppdbg",
       "request": "launch",
       "program": "${workspaceFolder}/ipc", // Path to the compiled executable
-      "args": ["demo.txt", "mobydick.txt", "3"], // Replace with your program's arguments
+      "args": ["config_3_100.txt", "mobydick.txt", "3"], // Replace with your program's arguments
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}", // Current working directory
       "environment": [],
