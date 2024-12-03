@@ -19,6 +19,8 @@
 // global time variable
 int global_time = 0;
 
+// this will be the index of children[] && semaphores
+int active_children = 0;
 
 // create a buffer for shared memory
 char buf[SHM_SIZE];
@@ -134,7 +136,6 @@ void freeSpace(Command ***commands, int total_commands) {
     free(cemp); // Free the array of pointers
 }
 
-
 // Sleep in ms
 void sleep_ms(int ms) {
     usleep(ms * 1000);
@@ -188,6 +189,7 @@ void remove_semaphores(int semaphore_id) {
     }
 }
 
+
 void initializeChildren(ChildProcess* children, int M) {
     for (int i = 0; i < M; i++) {
         children[i].pid = -1;
@@ -195,6 +197,23 @@ void initializeChildren(ChildProcess* children, int M) {
         children[i].creation_command = NULL;
     }
 }
+
+void initialize_free_semaphores(int *free_array, int M) {
+    for (int i = 0; i < M; i++) {
+        free_array[i] = 0;              // 0 (Free) or 1 (Occupied)  
+    }
+}
+
+int getAvailableSemaphore(int *free_array, int M) {    
+    for(int i = 0; i < M; i++) {
+        if(free_array[i] == 0) {
+            free_array[i] = 1;
+            return i;
+        }
+    }
+    return -1;
+}
+
 
 // ./ipc config_3_100.txt mobydick.txt 3
 int main(int argc, char *argv[]) {
@@ -218,7 +237,9 @@ int main(int argc, char *argv[]) {
 
     // create semaphores
     int sems_id = create_semaphores(max_children);
-
+    int availableSemaphore[max_children];
+    initialize_free_semaphores(availableSemaphore, max_children);
+    
     //create shared memory segment
     int shm_id = shmget(IPC_PRIVATE, sizeof(buf), IPC_CREAT | 0666);
 
@@ -232,8 +253,15 @@ int main(int argc, char *argv[]) {
     // this will be the index of children[] && semaphores
     int active_children = 0;
 
+    // Array to store indices of active children
+    int active_indices[max_children];  // Assuming max_children is the maximum number of children you can have
+    int active_count = 0;  // Number of active children
+
+
     // index to hold the current command
     int command_index = 0;
+    
+    
     while (TRUE) {
         // printf("Tick %d:\n", global_time);
 
@@ -263,17 +291,18 @@ int main(int argc, char *argv[]) {
             freeSpace(&commands, num_commands);
             exit(EXIT_SUCCESS);
         }
+
         // SPAWN STATUS
         else if (strcmp(current->status, "S") == 0 && current->timestamp == global_time) {
 
             // only when a 'compatible' command is found, move to the next one
             command_index++;
-            int child_index = active_children;
+            int child_index = getAvailableSemaphore(availableSemaphore, max_children);
 
             pid_t pid = fork();
             if (pid == 0) {
                 // child process
-
+                printf("Spanwed %s\n", current->cid);
                 // the child here will lock & wait for the semaphore value to be incremented by the parent
                 while(TRUE) {
 
@@ -288,15 +317,15 @@ int main(int argc, char *argv[]) {
                         perror("Error detaching from shared memory");
                         exit(EXIT_FAILURE);
                     }
-
                 }
             }
             else if(pid > 0) {
                 // the parent has to update the stats. Increase the array of active children
                 // init the structure before the fork is called or make the parent
+                children[child_index].pid = pid;
                 children[child_index].semaphore_index = child_index;
                 children[child_index].creation_command = current;
-                children[child_index].pid = pid;
+
                 active_children++;
             }
             else {
@@ -306,6 +335,7 @@ int main(int argc, char *argv[]) {
             }
 
         }
+
         // TERMINATION STATUS
         else if (strcmp(current->status, "T") == 0 && current->timestamp == global_time) {
 
@@ -317,18 +347,15 @@ int main(int argc, char *argv[]) {
                 if(!strcmp(current->cid, (children[i].creation_command)->cid)) {
 
                     if(kill(children[i].pid, SIGTERM) == 0) {
-                        // printf("Terminated %s %d\n", current->cid, children[i].pid);
+                        printf("Terminated %s %d\n", current->cid, children[i].pid);
+
                         waitpid(children[i].pid, NULL, 0);
 
-                        // Remove child from active list
-                        for (int j = i; j < active_children; j++) {
-                            children[j] = children[j + 1];
-                        }
+                        availableSemaphore[children[i].semaphore_index] = 0;
 
-                        // Clear the last entry after shifting
-                        children[active_children - 1].pid = -1;
-                        children[active_children - 1].semaphore_index = -1;
-                        children[active_children - 1].creation_command = NULL;
+                        children[i].pid = -1;
+                        children[i].semaphore_index = -1;
+                        children[i].creation_command = NULL;
 
                         // Decrement active children number
                         active_children--;
@@ -343,10 +370,20 @@ int main(int argc, char *argv[]) {
             command_index++;
         }
 
+
         // Sending randon line to a random child
         if(active_children > 0) {
-            // generate a random index for the child
-            int random_child = rand() % active_children;
+
+            active_count = 0;
+            for (int i = 0; i < max_children; i++) {
+                if (children[i].pid != -1) {  // Check if the child is active
+                    active_indices[active_count++] = i;  // Store the valid index
+                }
+            }
+            // Generate a random index from the list of active children indices
+            int random_child_index = rand() % active_count;
+            int random_child = active_indices[random_child_index];  // Get the actual index of the random child
+
 
             // may contain lines with 0 characters
             char *message = getRandomLine(argv[2]);
@@ -363,7 +400,7 @@ int main(int argc, char *argv[]) {
 
         // Each iteration is a simulation 'tick'
         global_time++;
+        sleep_ms(100);
     }
 
-    return 0;
 }
