@@ -251,12 +251,9 @@ int main(int argc, char *argv[]) {
     // this will be the index of children[] && semaphores
     int active_children = 0;
 
-    // Array to store indices of active children
-    int active_indices[max_children];  // Assuming max_children is the maximum number of children you can have
-
     // index to hold the current command
     int command_index = 0;
-    
+
     while (TRUE) {
         // printf("Tick %d:\n", global_time);
 
@@ -268,16 +265,19 @@ int main(int argc, char *argv[]) {
 
             //should we wait for the child to finish?
             //if exit comes and some children are running, just terminate them wait() and then exit
-            for (int i = 0; i < active_children; i++) {
-                if(kill(children[i].pid, SIGTERM) == 0) {
-                    printf("Killing child %s with pid %d\n", children[i].creation_command->cid, children[i].pid);
-                    waitpid(children[i].pid, NULL, 0);      // Absorb the exit status
-                } else {
-                    printf("Failed to terminate child");
-                    exit(EXIT_FAILURE);
+            for (int i = 0; i < max_children; i++) {
+                
+                if (children[i].pid != -1) {
+                    if(kill(children[i].pid, SIGTERM) == 0) {
+                        printf("Killing child %s with pid %d\n", children[i].creation_command->cid, children[i].pid);
+                        waitpid(children[i].pid, NULL, 0);      // Absorb the exit status
+                     } else {
+                        printf("Failed to terminate child");
+                        exit(EXIT_FAILURE);
+                    }  
                 }
-            }
 
+            }
 
             // Cleanup
             shmdt(shared_mem);
@@ -294,10 +294,22 @@ int main(int argc, char *argv[]) {
             command_index++;
 
             // semaphore available index & only that
-            int available_semaphore = getAvailableSemaphore(availableSemaphore, max_children);
+            int available_semaphore_index = getAvailableSemaphore(availableSemaphore, max_children);
 
-            // BUG: its not child index, its the index of the available semaphore
-            // child_index will be selected from active_indices
+
+            // get available children[] index
+            int child_index = -1;
+            for (int i = 0; i < max_children; i++) {
+                if (children[i].pid == -1) {
+                    child_index = i;
+                    break;
+                }
+            }
+                    
+            if (child_index == -1) {
+                printf("No available slot for new child!\n");
+                exit(EXIT_FAILURE);
+            }
 
             pid_t pid = fork();
             if (pid == 0) {
@@ -306,7 +318,7 @@ int main(int argc, char *argv[]) {
                 // the child here will lock & wait for the semaphore value to be incremented by the parent
                 while(TRUE) {
 
-                    wait_semaphore(sems_id, available_semaphore);
+                    wait_semaphore(sems_id, available_semaphore_index);
 
                     // attach to shared memory segment
                     char *data = shmat(shm_id, NULL, 0);
@@ -316,28 +328,24 @@ int main(int argc, char *argv[]) {
                     if (shmdt(data) == -1) {
                         perror("Error detaching from shared memory");
                         exit(EXIT_FAILURE);
-                    }
-                }
+                    }}
             }
-            else if(pid > 0) {
+            else if (pid > 0) {
                 // the parent has to update the stats. Increase the array of active children
                 // init the structure before the fork is called or make the parent
-                int child_index = active_children;
-                
+
+                // here i have to get an free index from children[]
                 children[child_index].pid = pid;
-                children[child_index].semaphore_index = available_semaphore;
+                children[child_index].semaphore_index = available_semaphore_index;
                 children[child_index].creation_command = current;
 
-                active_indices[active_children] = child_index;
-                availableSemaphore[child_index] = 1;                    //occupied
+                availableSemaphore[available_semaphore_index] = 1;                    //occupied
                 active_children++;
             }
             else {
-                // fork failed
                 printf("Fork failed\n");
                 exit(EXIT_FAILURE);
             }
-
         }
 
         // TERMINATION STATUS
@@ -346,29 +354,24 @@ int main(int argc, char *argv[]) {
             // upon termination the child process should not continue with the rest for the code
             // it will terminate/exit only when the parent process calls kill on the child
 
-            for (int i = 0; i < active_children; i++) {
+            for (int i = 0; i < max_children; i++) {
 
-                if(strcmp(current->cid, (children[i].creation_command)->cid) == 0 && children[i].creation_command != NULL) {
+                if(children[i].pid != -1 && strcmp(current->cid, (children[i].creation_command)->cid) == 0) {
 
                     if(kill(children[i].pid, SIGTERM) == 0) {
-                        printf("Terminated %s %d\n", current->cid, children[i].pid);
+                        // printf("Terminated %s %d\n", current->cid, children[i].pid);
 
                         waitpid(children[i].pid, NULL, 0);
 
                         // Make the semaphore available again
                         availableSemaphore[children[i].semaphore_index] = 0;
 
+                        children[i].pid = -1;
+                        children[i].semaphore_index = -1;
+                        children[i].creation_command = NULL;
+
                         // Decrement active children number
                         active_children--;
-
-                        for (int j = i; j < active_children; j++) {
-                            children[j] = children[j + 1];
-                        }
-
-                        children[active_children].pid = -1;
-                        children[active_children].semaphore_index = -1;
-                        children[active_children].creation_command = NULL;
-
                         break;
                     }
 
@@ -384,13 +387,17 @@ int main(int argc, char *argv[]) {
         // Sending randon line to a random child
         if(active_children > 0) {
             // Generate a random index from the list of active children indices
-            int random_index = rand() % active_children;
+            int valid_child_found = FALSE;
+            int random_index = -1;
 
-            int valid_random_child = active_indices[random_index];
-            
-            //BUG: random_child may be 0, which is an invalid index for children array
-            //check array for -1 pids and rand again
-            //or shift carefully
+            while (!valid_child_found) {
+                random_index = rand() % max_children;
+                if (children[random_index].pid != -1) {
+                    valid_child_found = TRUE;
+                }
+            }
+
+            int valid_random_child = random_index;
 
             // may contain lines with 0 characters
             char *message = getRandomLine(argv[2]);
@@ -404,10 +411,9 @@ int main(int argc, char *argv[]) {
             free(message);
         }
 
-
         // Each iteration is a simulation 'tick'
         global_time++;
-        sleep_ms(100);
+        sleep_ms(50);
     }
 
 }
