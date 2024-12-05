@@ -26,13 +26,16 @@ This project implements a system where a parent process (P) spawns multiple chil
 
 ## Compilation
 
-To compile the project, use the following command:
+To compile the project, use the provided Makefile. Simply run the following command:
 
 ```bash
-gcc -g -o ipc ipc.c -lrt
+make
 ```
+This will compile the project and generate an executable named `ipc`.
 
-- `-lrt`: Links the real-time library (required for IPC-related functionality).
+### Makefile Targets
+- `make`: Compiles the project and generates the executable `ipc`.
+- `make clean`: Removes the compiled binary and cleans up shared memory and semaphores.
 
 ## Usage
 
