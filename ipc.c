@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
         // EXIT STATUS
         if (strcmp(current->status, "EXIT") == 0 && current->timestamp == global_time) {
             
-            printf("EXIT STATUS:\n");
+            printf("EXIT STATUS\n");
             //should we wait for the child to finish?
             //if exit comes and some children are running, just terminate them wait() and then exit
             for (int i = 0; i < max_children; i++) {
@@ -269,7 +269,7 @@ int main(int argc, char *argv[]) {
                     waitpid(children[i].pid, &status, 0);
                         
                     int active_time = global_time - children[i].creation_command->timestamp;
-                    printf("Child %s was alive -> Terminate. Messages received: %d, Active time: %d ticks.\n", (children[i].creation_command)->cid, WEXITSTATUS(status), active_time);
+                    printf("\nChild %s was alive -> Terminate. \n\tMessages received: %d\n\tActive time(tick): %d\n", children[i].creation_command->cid, WEXITSTATUS(status), active_time);
                 }
 
             }
@@ -411,7 +411,7 @@ int main(int argc, char *argv[]) {
 
             // Copy the random line to the shared memory segment
             strcpy(shared_mem, message);
-            // printf("Tick: %d - Parent signals %s msg: %s", global_time, (children[valid_random_child].creation_command)->cid, message);
+            // printf("Parent signals %s msg: %s", (children[valid_random_child].creation_command)->cid, message);
 
             // we have to signal the semaphore of that specific child
             signal_semaphore(sems_id, children[valid_random_child].semaphore_index);

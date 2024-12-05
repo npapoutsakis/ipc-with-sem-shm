@@ -1,4 +1,3 @@
-
 # IPC Process Management with Semaphores and Shared Memory
 
 This project implements a system where a parent process (P) spawns multiple child processes (Ci). The parent process manages communication with the children through semaphores and shared memory. The system simulates a message-passing mechanism, where the parent randomly sends lines of text to the active child processes, and children print the received message. The child processes are terminated based on commands from the parent.
@@ -30,7 +29,7 @@ This project implements a system where a parent process (P) spawns multiple chil
 To compile the project, use the following command:
 
 ```bash
-gcc -o ipc_process_manager main.c -lrt
+gcc -g -o ipc ipc.c -lrt
 ```
 
 - `-lrt`: Links the real-time library (required for IPC-related functionality).
@@ -40,7 +39,7 @@ gcc -o ipc_process_manager main.c -lrt
 ### Run the program with the following command:
 
 ```bash
-./ipc_process_manager <config_file> <text_file> <max_processes>
+./ipc <config_file> <text_file> <max_processes>
 ```
 
 - `<config_file>`: Path to the configuration file (defines the spawn/terminate/exit commands).
@@ -50,10 +49,11 @@ gcc -o ipc_process_manager main.c -lrt
 ### Example:
 
 ```bash
-./ipc_process_manager config_3_100.txt mobydick.txt 3
+./ipc config_3_100.txt mobydick.txt 3
 ```
 
 This will:
+
 - Use the `config_3_100.txt` as the command file.
 - Use the `mobydick.txt` file for sending random lines to the child processes.
 - Limit the system to a maximum of 3 child processes at a time.
@@ -81,6 +81,7 @@ The configuration file should consist of a series of commands that the parent pr
 ```
 
 This file will:
+
 - Spawn child `C0` at timestamp 5.
 - Spawn child `C1` at timestamp 18.
 - Terminate child `C0` at timestamp 25.
@@ -121,8 +122,3 @@ Parent sent to: C1 the msg: "surf. Right and left, the streets take you waterwar
 ## License
 
 This project is open source and available under the MIT License.
-
-## Acknowledgements
-
-- The project was built as part of an assignment for process management and inter-process communication (IPC) in C.
-- The use of semaphores and shared memory is based on the POSIX IPC mechanisms.
