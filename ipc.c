@@ -249,7 +249,6 @@ int main(int argc, char *argv[]) {
         if (strcmp(current->status, "EXIT") == 0 && current->timestamp == global_time) {
             
             printf("EXIT STATUS\n");
-            //should we wait for the child to finish?
             //if exit comes and some children are running, just terminate them wait() and then exit
             for (int i = 0; i < max_children; i++) {
                 
@@ -262,7 +261,7 @@ int main(int argc, char *argv[]) {
                     waitpid(children[i].pid, &status, 0);
                         
                     int active_time = global_time - children[i].creation_command->timestamp;
-                    printf("\nChild %s was alive -> Terminate. \n\tMessages received: %d\n\tActive time(tick): %d\n", children[i].creation_command->cid, WEXITSTATUS(status), active_time);
+                    printf("\nChild %s was alive -> Terminate. \n\tMessages received: %d\n\tActive time(tick): %d\n", children[i].creation_command->cid, WEXITSTATUS(status) - 1, active_time);
                 }
 
             }
@@ -367,7 +366,7 @@ int main(int argc, char *argv[]) {
                     waitpid(children[i].pid, &status, 0);
                         
                     int active_time = global_time - children[i].creation_command->timestamp;
-                    printf("Child %s terminated. \n\tMessages received: %d\n\tActive time(tick): %d\n", current->cid, WEXITSTATUS(status), active_time);
+                    printf("Child %s terminated. \n\tMessages received: %d\n\tActive time(tick): %d\n", current->cid, WEXITSTATUS(status) - 1, active_time);
 
                     // Make the semaphore available again
                     availableSemaphore[children[i].semaphore_index] = 0;
