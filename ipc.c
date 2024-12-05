@@ -27,14 +27,12 @@ typedef struct Command {
     char status[5];       // S (Spawn), T (Termination), E (Exit)
 } Command;
 
-
 // Simple structure to keep useful info about a child process upon creation
 typedef struct ChildProcess {
     pid_t pid;                      // Child Process ID
     int semaphore_index;            // semaphore assigned to the specific child
     Command *creation_command;      // creation commands executed from parent
 } ChildProcess;
-
 
 // Get a non empty random line from text file
 char *getRandomLine(char *filename){
@@ -66,7 +64,6 @@ char *getRandomLine(char *filename){
     fclose(file);
     return buffer;
 }
-
 
 // Parse commands from the config file
 void parseCommands(char *filename, Command ***commands, int *num_commands) {
@@ -119,7 +116,6 @@ void parseCommands(char *filename, Command ***commands, int *num_commands) {
     return;
 }
 
-
 // Free Command Array
 void freeSpace(Command ***commands, int total_commands) {
     // Free the allocated memory
@@ -154,7 +150,6 @@ int create_semaphores(int num_semaphores) {
     return semaphore_id;
 }
 
-
 // Wait operation
 void wait_semaphore(int semaphore_id, int index) {
     struct sembuf sb = {index, -1, 0};
@@ -164,7 +159,6 @@ void wait_semaphore(int semaphore_id, int index) {
     }
 }
 
-
 // Signal operation
 void signal_semaphore(int semaphore_id, int index) {
     struct sembuf sb = {index, 1, 0};
@@ -173,7 +167,6 @@ void signal_semaphore(int semaphore_id, int index) {
         exit(EXIT_FAILURE);
     }
 }
-
 
 // clear used semaphores
 void remove_semaphores(int semaphore_id) {
@@ -360,6 +353,11 @@ int main(int argc, char *argv[]) {
             for (int i = 0; i < max_children; i++) {
 
                 if(children[i].pid != -1 && strcmp(current->cid, (children[i].creation_command)->cid) == 0) {
+
+                    // kill(children[i].pid, SIGTERM); ? in both cases the child will exit
+
+                    // Method 1: Send SIGTERM to the shared memory segment and signal the child to see it. Then termination is occuried
+                    // Method 2: Send SIGTERM via the kill() function and terminate the child process.
 
                     // signal the child to exit - IPC move
                     strcpy(shared_mem, "SIGTERM");
